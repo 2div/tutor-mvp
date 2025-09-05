@@ -4,7 +4,6 @@ import type { Progress } from "../lib/progress";
 import {
   loadProgress,
   saveAttempt,
-  resetProgress,     // (optional, not used yet—but handy)
   loadVoice,
   saveVoice,
 } from "../lib/progress";
@@ -21,15 +20,30 @@ type Choice = { text_ar: string; correct: boolean };
 type PracticeItem = { stem_ar: string; choices: Choice[]; explain_ar: string };
 
 const SEED: {
-  meta: { grade: number; subject: string; unit: string; lesson: number; objective_code: string };
+  meta: {
+    grade: number;
+    subject: string;
+    unit: string;
+    lesson: number;
+    objective_code: string;
+  };
   concept: { text_ar: string; examples: string[]; check_question: string };
   practice: PracticeItem[];
 } = {
-  meta: { grade: 2, subject: "math", unit: "addition-within-20", lesson: 3, objective_code: "G2.MATH.ADD.20" },
+  meta: {
+    grade: 2,
+    subject: "math",
+    unit: "addition-within-20",
+    lesson: 3,
+    objective_code: "G2.MATH.ADD.20",
+  },
   concept: {
     text_ar:
       "لتسهيل 9 + 7 نكَوِّن عشرة أولًا: 9 + 1 = 10، يتبقى 6، إذًا 10 + 6 = 16. جرّب نفس الفكرة مع 8 + 6!",
-    examples: ["8 + 6 = 14 (8 + 2 = 10 ثم +4)", "7 + 5 = 12 (7 + 3 = 10 ثم +2)"],
+    examples: [
+      "8 + 6 = 14 (8 + 2 = 10 ثم +4)",
+      "7 + 5 = 12 (7 + 3 = 10 ثم +2)",
+    ],
     check_question: "احسب بسرعة: 9 + 7 = ؟",
   },
   practice: [
@@ -60,10 +74,21 @@ function useArabicTTS() {
   const normalizeArabicMathSpeech = (text: string) => {
     let t = String(text);
     const pairs: Array<[string, string]> = [
-      ["→", " ثم "], ["⇒", " ثم "], ["->", " ثم "], ["=>", " ثم "],
-      ["×", " ضرب "], ["x", " ضرب "], ["X", " ضرب "], ["*", " ضرب "],
-      ["+", " زائد "], ["-", " ناقص "], ["−", " ناقص "], ["/", " على "], ["÷", " على "],
-      ["=", " يساوي "], ["%", " بالمائة "],
+      ["→", " ثم "],
+      ["⇒", " ثم "],
+      ["->", " ثم "],
+      ["=>", " ثم "],
+      ["×", " ضرب "],
+      ["x", " ضرب "],
+      ["X", " ضرب "],
+      ["*", " ضرب "],
+      ["+", " زائد "],
+      ["-", " ناقص "],
+      ["−", " ناقص "],
+      ["/", " على "],
+      ["÷", " على "],
+      ["=", " يساوي "],
+      ["%", " بالمائة "],
     ];
     for (const [a, b] of pairs) t = t.split(a).join(b);
     t = t.split(" يساوي ").join("، يساوي، ");
@@ -82,19 +107,23 @@ function useArabicTTS() {
 
       // prefer remembered voice
       const remembered = loadVoice();
-      if (remembered && all.some(v => v.name === remembered)) {
+      if (remembered && all.some((v) => v.name === remembered)) {
         setSelectedVoice(remembered);
         return;
       }
       // fallback: first Arabic voice
       if (!selectedVoice) {
-        const ar = all.find(v => v.lang && v.lang.toLowerCase().startsWith("ar"));
+        const ar = all.find(
+          (v) => v.lang && v.lang.toLowerCase().startsWith("ar"),
+        );
         if (ar) setSelectedVoice(ar.name);
       }
     };
     load();
     if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = load;
-    return () => { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null; };
+    return () => {
+      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
+    };
   }, [selectedVoice]);
 
   // Persist voice choice
@@ -106,26 +135,32 @@ function useArabicTTS() {
     try {
       const synth = window.speechSynthesis;
       if (!synth) return;
-      const utter = new SpeechSynthesisUtterance(normalizeArabicMathSpeech(text));
+      const utter = new SpeechSynthesisUtterance(
+        normalizeArabicMathSpeech(text),
+      );
       // friendlier defaults
-      utter.rate = 0.95; utter.pitch = 1.05; utter.volume = 1.0;
+      utter.rate = 0.95;
+      utter.pitch = 1.05;
+      utter.volume = 1.0;
 
       const list = synth.getVoices();
       const v =
-        list.find(x => x.name === selectedVoice) ||
-        list.find(x => x.lang?.toLowerCase().startsWith("ar"));
+        list.find((x) => x.name === selectedVoice) ||
+        list.find((x) => x.lang?.toLowerCase().startsWith("ar"));
       if (v) utter.voice = v;
       utter.lang = v?.lang || "ar-SA";
 
       synth.cancel();
       synth.speak(utter);
-    } catch { /* no-op */ }
+    } catch {
+      /* no-op */
+    }
   };
 
   // only show Arabic voices in dropdown
   const arabicVoices = useMemo(
-    () => voices.filter(v => v.lang && v.lang.toLowerCase().startsWith("ar")),
-    [voices]
+    () => voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith("ar")),
+    [voices],
   );
 
   return { speak, voices: arabicVoices, selectedVoice, setSelectedVoice };
@@ -133,7 +168,9 @@ function useArabicTTS() {
 
 /* ------------------------------ UI ------------------------------ */
 export default function TutorMVP() {
-  const [mode, setMode] = useState<"intro" | "explain" | "practice" | "summary">("intro");
+  const [mode, setMode] = useState<
+    "intro" | "explain" | "practice" | "summary"
+  >("intro");
   const [qIndex, setQIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
@@ -148,7 +185,7 @@ export default function TutorMVP() {
     if (mode === "explain") {
       speak(`اليوم سنتعلم إستراتيجية تكوين العشرة. ${SEED.concept.text_ar}`);
     }
-  }, [mode]);
+  }, [mode, speak]); // include speak to satisfy exhaustive-deps
 
   const currentQ = SEED.practice[qIndex];
 
@@ -158,11 +195,11 @@ export default function TutorMVP() {
       const wasCorrect = !!currentQ.choices[selected]?.correct;
       const updated = saveAttempt(OBJ, wasCorrect);
       setStored(updated);
-      if (wasCorrect) setScore(s => s + 1);
+      if (wasCorrect) setScore((s) => s + 1);
     }
 
     if (qIndex < SEED.practice.length - 1) {
-      setQIndex(i => i + 1);
+      setQIndex((i) => i + 1);
       setSelected(null);
     } else {
       setMode("summary");
@@ -181,11 +218,15 @@ export default function TutorMVP() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs">
-                <span>🤖</span><span>معلّم الرياضيات الذكي</span>
+                <span>🤖</span>
+                <span>معلّم الرياضيات الذكي</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold drop-shadow">تكوين العشرة — تدريب ممتع!</h1>
+              <h1 className="text-2xl sm:text-3xl font-extrabold drop-shadow">
+                تكوين العشرة — تدريب ممتع!
+              </h1>
               <p className="text-sm/6 opacity-90">
-                الصف {SEED.meta.grade} • {SEED.meta.subject} • {SEED.meta.unit} • الدرس {SEED.meta.lesson}
+                الصف {SEED.meta.grade} • {SEED.meta.subject} • {SEED.meta.unit}{" "}
+                • الدرس {SEED.meta.lesson}
               </p>
             </div>
 
@@ -197,7 +238,9 @@ export default function TutorMVP() {
                 value={selectedVoice || ""}
                 onChange={(e) => setSelectedVoice(e.target.value)}
               >
-                {voices.length === 0 && <option className="text-black">System default</option>}
+                {voices.length === 0 && (
+                  <option className="text-black">System default</option>
+                )}
                 {voices.map((v) => (
                   <option key={v.name} value={v.name} className="text-black">
                     {v.name} ({v.lang})
@@ -219,7 +262,8 @@ export default function TutorMVP() {
         <section className="rounded-[2rem] ring-1 ring-black/5 bg-white shadow-xl p-6 md:p-8">
           <h2 className="mb-2 text-xl font-semibold">أهلاً بك 👋</h2>
           <p className="text-lg leading-8">
-            سنتدرّب اليوم على الجمع حتى 20 باستخدام طريقة <span className="font-semibold">تكوين العشرة</span>.
+            سنتدرّب اليوم على الجمع حتى 20 باستخدام طريقة{" "}
+            <span className="font-semibold">«تكوين العشرة»</span>.
           </p>
           <div className="mt-4 flex gap-3">
             <button
@@ -272,7 +316,10 @@ export default function TutorMVP() {
           </div>
 
           {/* Progress dots */}
-          <div className="mb-4 flex items-center justify-center gap-2" aria-hidden>
+          <div
+            className="mb-4 flex items-center justify-center gap-2"
+            aria-hidden
+          >
             {SEED.practice.map((_, i) => (
               <span
                 key={i}
@@ -289,8 +336,14 @@ export default function TutorMVP() {
               const correct = c.correct;
               const show = selected != null;
               const color = show
-                ? (correct ? "bg-emerald-50 border-emerald-500" : isSelected ? "bg-rose-50 border-rose-500" : "bg-white border-neutral-200")
-                : (isSelected ? "bg-emerald-50 border-emerald-600" : "bg-white border-neutral-200");
+                ? correct
+                  ? "bg-emerald-50 border-emerald-500"
+                  : isSelected
+                    ? "bg-rose-50 border-rose-500"
+                    : "bg-white border-neutral-200"
+                : isSelected
+                  ? "bg-emerald-50 border-emerald-600"
+                  : "bg-white border-neutral-200";
 
               return (
                 <button
@@ -328,21 +381,39 @@ export default function TutorMVP() {
       {mode === "summary" && (
         <section className="rounded-[2rem] ring-1 ring-black/5 bg-white shadow-xl p-6 md:p-8">
           <h2 className="mb-2 text-xl font-semibold">أحسنت! 🎉</h2>
-          <p className="mb-2">أنهيت تدريب "تكوين العشرة".</p>
-          <p className="mb-1">نتيجتك الآن: {score} من {SEED.practice.length}</p>
+          <p className="mb-2">أنهيت تدريب «تكوين العشرة».</p>
+          <p className="mb-1">
+            نتيجتك الآن: {score} من {SEED.practice.length}
+          </p>
           <p className="text-sm text-gray-600">
-            إجمالي المحاولات (على هذا الجهاز): {stored.attempts} — الصحيحة: {stored.correct}
-            {stored.attempts > 0 && <> — الدقة: {Math.round((stored.correct / stored.attempts) * 100)}%</>}
+            إجمالي المحاولات (على هذا الجهاز): {stored.attempts} — الصحيحة:{" "}
+            {stored.correct}
+            {stored.attempts > 0 && (
+              <>
+                {" "}
+                — الدقة: {Math.round((stored.correct / stored.attempts) * 100)}%
+              </>
+            )}
           </p>
           <div className="mt-4 flex gap-2">
             <button
-              onClick={() => { setMode("practice"); setQIndex(0); setScore(0); setSelected(null); }}
+              onClick={() => {
+                setMode("practice");
+                setQIndex(0);
+                setScore(0);
+                setSelected(null);
+              }}
               className="px-5 py-3 rounded-2xl bg-white border border-emerald-200 shadow hover:bg-emerald-50 active:scale-95 focus:outline-none focus:ring-4 focus:ring-emerald-100"
             >
               أعد التدريب
             </button>
             <button
-              onClick={() => { setMode("intro"); setQIndex(0); setScore(0); setSelected(null); }}
+              onClick={() => {
+                setMode("intro");
+                setQIndex(0);
+                setScore(0);
+                setSelected(null);
+              }}
               className="px-5 py-3 rounded-2xl bg-emerald-600 text-white shadow hover:bg-emerald-700 active:scale-95 focus:outline-none focus:ring-4 focus:ring-emerald-200"
             >
               الرجوع للرئيسية
