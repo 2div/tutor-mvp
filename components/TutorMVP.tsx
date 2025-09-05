@@ -70,7 +70,7 @@ const SEED: {
 
 /* ------------------------------ TTS Hook ------------------------------ */
 function useArabicTTS() {
-  // Naturalize math speech in Arabic (operators → words, arrows → ثم)
+  // --- Normalize math speech (operators -> Arabic words)
   const normalizeArabicMathSpeech = (text: string) => {
     let t = String(text);
     const pairs: Array<[string, string]> = [
@@ -98,72 +98,109 @@ function useArabicTTS() {
 
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
-  // Load voices + remembered voice (browsers fill voices asynchronously)
+  // Poll voices until available (Android often delays voice list)
   useEffect(() => {
-    const load = () => {
-      const all = window.speechSynthesis?.getVoices?.() || [];
-      setVoices(all);
+    const synth = window.speechSynthesis;
+    if (!synth) return;
 
-      // prefer remembered voice
-      const remembered = loadVoice();
-      if (remembered && all.some((v) => v.name === remembered)) {
-        setSelectedVoice(remembered);
-        return;
-      }
-      // fallback: first Arabic voice
-      if (!selectedVoice) {
-        const ar = all.find(
-          (v) => v.lang && v.lang.toLowerCase().startsWith("ar"),
-        );
-        if (ar) setSelectedVoice(ar.name);
+    let tries = 0;
+    const maxTries = 30; // ~3s
+    const tick = () => {
+      const all = synth.getVoices();
+      if (all && all.length > 0) {
+        setVoices(all);
+        setReady(true);
+        // remember voice from previous session
+        const remembered = loadVoice();
+        const ar = all.find((v) => v.lang?.toLowerCase().startsWith("ar"));
+        if (remembered && all.some((v) => v.name === remembered)) {
+          setSelectedVoice(remembered);
+        } else if (ar) {
+          setSelectedVoice(ar.name);
+        } else {
+          // fall back to any voice to avoid silent failure
+          setSelectedVoice(all[0].name);
+        }
+      } else if (tries++ < maxTries) {
+        setTimeout(tick, 100);
+      } else {
+        setVoices([]);
+        setReady(true); // give up but mark ready
       }
     };
-    load();
-    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = load;
+    tick();
+
+    // also update if browser fires onvoiceschanged
+    const handler = () => tick();
+    synth.onvoiceschanged = handler;
     return () => {
-      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
+      synth.onvoiceschanged = null;
     };
-  }, [selectedVoice]);
+  }, []);
 
-  // Persist voice choice
+  // Persist choice
   useEffect(() => {
     if (selectedVoice) saveVoice(selectedVoice);
   }, [selectedVoice]);
+
+  // Resume on user interaction / tab visibility (mobile quirk)
+  useEffect(() => {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+
+    const resume = () => {
+      try {
+        synth.resume();
+      } catch {}
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") resume();
+    };
+
+    document.addEventListener("click", resume, { once: false });
+    document.addEventListener("touchstart", resume, { once: false });
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("click", resume);
+      document.removeEventListener("touchstart", resume);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
 
   const speak = (text: string) => {
     try {
       const synth = window.speechSynthesis;
       if (!synth) return;
-      const utter = new SpeechSynthesisUtterance(
-        normalizeArabicMathSpeech(text),
-      );
-      // friendlier defaults
-      utter.rate = 0.95;
-      utter.pitch = 1.05;
-      utter.volume = 1.0;
+      const u = new SpeechSynthesisUtterance(normalizeArabicMathSpeech(text));
+      u.rate = 0.95;
+      u.pitch = 1.05;
+      u.volume = 1.0;
 
       const list = synth.getVoices();
-      const v =
-        list.find((x) => x.name === selectedVoice) ||
-        list.find((x) => x.lang?.toLowerCase().startsWith("ar"));
-      if (v) utter.voice = v;
-      utter.lang = v?.lang || "ar-SA";
+      const byName = list.find((v) => v.name === selectedVoice || "");
+      const ar = list.find((v) => v.lang?.toLowerCase().startsWith("ar"));
+      u.voice = byName || ar || list[0];
+      u.lang = u.voice?.lang || "ar-SA";
 
-      synth.cancel();
-      synth.speak(utter);
-    } catch {
-      /* no-op */
-    }
+      synth.cancel(); // ensure fresh start
+      synth.speak(u);
+    } catch {}
   };
 
-  // only show Arabic voices in dropdown
   const arabicVoices = useMemo(
     () => voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith("ar")),
     [voices],
   );
 
-  return { speak, voices: arabicVoices, selectedVoice, setSelectedVoice };
+  return {
+    speak,
+    voices: arabicVoices,
+    selectedVoice,
+    setSelectedVoice,
+    ready,
+  };
 }
 
 /* ------------------------------ UI ------------------------------ */
