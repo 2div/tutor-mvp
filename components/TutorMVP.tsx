@@ -1,5 +1,6 @@
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
+import confetti from "canvas-confetti";
 import type { Progress } from "../lib/progress";
 import {
   loadProgress,
