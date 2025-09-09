@@ -1,5 +1,6 @@
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
+import lessonData from "@/data/addition-20.json";
 import confetti from "canvas-confetti";
 import type { Progress } from "../lib/progress";
 import {
@@ -17,56 +18,31 @@ import {
  * - Kid-friendly UI + Arabic math speech normalization
  */
 
+// --- Plausible event helper (safe if script is not loaded) ---
+const track = (name: string, props?: Record<string, any>) => {
+  try {
+    (window as any).plausible?.(name, { props });
+  } catch {}
+};
+
 type Choice = { text_ar: string; correct: boolean };
 type PracticeItem = { stem_ar: string; choices: Choice[]; explain_ar: string };
 
-const SEED: {
+// JSON-backed lesson data
+const SEED = {
   meta: {
-    grade: number;
-    subject: string;
-    unit: string;
-    lesson: number;
-    objective_code: string;
-  };
-  concept: { text_ar: string; examples: string[]; check_question: string };
-  practice: PracticeItem[];
-} = {
-  meta: {
-    grade: 2,
-    subject: "math",
-    unit: "addition-within-20",
-    lesson: 3,
-    objective_code: "G2.MATH.ADD.20",
+    grade: lessonData.meta.grade,
+    subject: lessonData.meta.subject,
+    unit: lessonData.meta.unit,
+    lesson: 3, // keep your lesson number (or add to JSON)
+    objective_code: lessonData.meta.objective_code,
   },
   concept: {
-    text_ar:
-      "لتسهيل 9 + 7 نكَوِّن عشرة أولًا: 9 + 1 = 10، يتبقى 6، إذًا 10 + 6 = 16. جرّب نفس الفكرة مع 8 + 6!",
-    examples: [
-      "8 + 6 = 14 (8 + 2 = 10 ثم +4)",
-      "7 + 5 = 12 (7 + 3 = 10 ثم +2)",
-    ],
-    check_question: "احسب بسرعة: 9 + 7 = ؟",
+    text_ar: lessonData.explain.text_ar,
+    examples: lessonData.explain.examples,
+    check_question: lessonData.explain.check,
   },
-  practice: [
-    {
-      stem_ar: "اختر الناتج الصحيح: 9 + 7 = ؟",
-      choices: [
-        { text_ar: "15", correct: false },
-        { text_ar: "16", correct: true },
-        { text_ar: "18", correct: false },
-      ],
-      explain_ar: "نكوّن 10 من 9 بإضافة 1، يتبقى 6 → 10 + 6 = 16.",
-    },
-    {
-      stem_ar: "8 + 6 = ؟ باستخدام تكوين العشرة",
-      choices: [
-        { text_ar: "13", correct: false },
-        { text_ar: "14", correct: true },
-        { text_ar: "15", correct: false },
-      ],
-      explain_ar: "8 + 2 = 10 ثم نضيف 4 → 14.",
-    },
-  ],
+  practice: lessonData.practice as PracticeItem[],
 };
 
 /* ------------------------------ TTS Hook ------------------------------ */
@@ -180,7 +156,7 @@ function useArabicTTS() {
       u.volume = 1.0;
 
       const list = synth.getVoices();
-      const byName = list.find((v) => v.name === selectedVoice || "");
+      const byName = list.find((v) => v.name === (selectedVoice || ""));
       const ar = list.find((v) => v.lang?.toLowerCase().startsWith("ar"));
       u.voice = byName || ar || list[0];
       u.lang = u.voice?.lang || "ar-SA";
@@ -217,13 +193,46 @@ export default function TutorMVP() {
   const OBJ = SEED.meta.objective_code;
   const [stored, setStored] = useState<Progress>(() => loadProgress(OBJ));
 
-  const { speak, voices, selectedVoice, setSelectedVoice } = useArabicTTS();
+  const { speak, voices, selectedVoice, setSelectedVoice, ready } =
+    useArabicTTS();
 
   useEffect(() => {
     if (mode === "explain") {
       speak(`اليوم سنتعلم إستراتيجية تكوين العشرة. ${SEED.concept.text_ar}`);
     }
-  }, [mode, speak]); // include speak to satisfy exhaustive-deps
+  }, [mode, speak]);
+
+  // 🎉 Confetti when reaching summary
+  useEffect(() => {
+    if (mode !== "summary") return;
+    try {
+      confetti({
+        particleCount: 120,
+        spread: 70,
+        scalar: 1.1,
+        origin: { y: 0.65 },
+      });
+      setTimeout(() => {
+        confetti({
+          particleCount: 90,
+          spread: 100,
+          ticks: 200,
+          origin: { y: 0.5 },
+        });
+      }, 450);
+    } catch {}
+  }, [mode]);
+
+  // 📈 Track lesson finish
+  useEffect(() => {
+    if (mode === "summary") {
+      track("lesson_finish", {
+        objective: SEED.meta.objective_code,
+        score,
+        total: SEED.practice.length,
+      });
+    }
+  }, [mode, score]);
 
   const currentQ = SEED.practice[qIndex];
 
@@ -233,6 +242,7 @@ export default function TutorMVP() {
       const wasCorrect = !!currentQ.choices[selected]?.correct;
       const updated = saveAttempt(OBJ, wasCorrect);
       setStored(updated);
+      track("answer_submit", { objective: OBJ, qIndex, correct: wasCorrect });
       if (wasCorrect) setScore((s) => s + 1);
     }
 
@@ -268,29 +278,43 @@ export default function TutorMVP() {
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <label className="text-xs opacity-90">الصوت:</label>
-              <select
-                dir="ltr"
-                className="rounded-full border border-white/30 bg-white/20 px-3 py-1.5 text-sm text-white placeholder-white/80 backdrop-blur"
-                value={selectedVoice || ""}
-                onChange={(e) => setSelectedVoice(e.target.value)}
-              >
-                {voices.length === 0 && (
-                  <option className="text-black">System default</option>
-                )}
-                {voices.map((v) => (
-                  <option key={v.name} value={v.name} className="text-black">
-                    {v.name} ({v.lang})
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => speak("مرحباً! هذا اختبار للصوت العربي.")}
-                className="rounded-full bg-white/20 px-4 py-1.5 text-sm shadow hover:bg-white/30 active:scale-95 transition"
-              >
-                جرّب
-              </button>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                <label className="text-xs opacity-90">الصوت:</label>
+                <select
+                  dir="ltr"
+                  className="rounded-full border border-white/30 bg-white/20 px-3 py-1.5 text-sm text-white placeholder-white/80 backdrop-blur"
+                  value={selectedVoice || ""}
+                  onChange={(e) => setSelectedVoice(e.target.value)}
+                >
+                  {voices.length === 0 && (
+                    <option className="text-black">System default</option>
+                  )}
+                  {voices.map((v) => (
+                    <option key={v.name} value={v.name} className="text-black">
+                      {v.name} ({v.lang})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    speak("مرحباً! هذا اختبار للصوت العربي.");
+                    track("voice_try", { voice: selectedVoice });
+                  }}
+                  className="rounded-full bg-white/20 px-4 py-1.5 text-sm shadow hover:bg-white/30 active:scale-95 transition"
+                >
+                  جرّب
+                </button>
+              </div>
+
+              {/* Warning banner if no Arabic voices found */}
+              {ready && voices.length === 0 && (
+                <div className="rounded-lg bg-white/15 px-3 py-2 text-xs">
+                  ⚠️ لا توجد أصوات عربية مثبتة على هذا الجهاز. انتقل إلى إعدادات
+                  الهاتف ← إدارة عامة ← تحويل النص إلى كلام ← **Speech Services
+                  by Google** ثم حمّل صوت «العربية».
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -305,7 +329,10 @@ export default function TutorMVP() {
           </p>
           <div className="mt-4 flex gap-3">
             <button
-              onClick={() => setMode("explain")}
+              onClick={() => {
+                track("lesson_start", { objective: SEED.meta.objective_code });
+                setMode("explain");
+              }}
               className="px-5 py-3 rounded-2xl bg-emerald-600 text-white shadow hover:bg-emerald-700 active:scale-95 focus:outline-none focus:ring-4 focus:ring-emerald-200"
             >
               ابدأ الشرح
@@ -386,7 +413,14 @@ export default function TutorMVP() {
               return (
                 <button
                   key={idx}
-                  onClick={() => setSelected(idx)}
+                  onClick={() => {
+                    setSelected(idx);
+                    track("answer_select", {
+                      objective: OBJ,
+                      qIndex,
+                      choiceIndex: idx,
+                    });
+                  }}
                   className={`w-full rounded-2xl border px-5 py-4 text-right text-xl transition hover:shadow-lg active:scale-[0.99] ${color}`}
                   disabled={selected != null}
                 >

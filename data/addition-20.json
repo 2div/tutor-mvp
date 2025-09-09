@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "grade": 2,
+    "subject": "math",
+    "unit": "addition-within-20",
+    "objective_code": "G2.MATH.ADD.20",
+    "title_ar": "تكوين العشرة"
+  },
+  "explain": {
+    "text_ar": "نكوّن عشرة أولًا ثم نكمّل الباقي.",
+    "examples": ["9 + 7 = 9 + 1 + 6 = 16", "8 + 6 = 8 + 2 + 4 = 14"],
+    "check": "كم يساوي 7 + 9 ؟"
+  },
+  "practice": [
+    {
+      "stem_ar": "7 + 9 = ؟",
+      "choices": [
+        { "text_ar": "15", "correct": false },
+        { "text_ar": "16", "correct": true },
+        { "text_ar": "17", "correct": false }
+      ],
+      "explain_ar": "7 + 3 = 10، يتبقى 6 → 16"
+    },
+    {
+      "stem_ar": "6 + 8 = ؟",
+      "choices": [
+        { "text_ar": "13", "correct": false },
+        { "text_ar": "14", "correct": true },
+        { "text_ar": "15", "correct": false }
+      ],
+      "explain_ar": "6 + 4 = 10، يتبقى 4 → 14"
+    },
+    {
+      "stem_ar": "5 + 9 = ؟",
+      "choices": [
+        { "text_ar": "14", "correct": false },
+        { "text_ar": "15", "correct": true },
+        { "text_ar": "16", "correct": false }
+      ],
+      "explain_ar": "9 + 1 = 10، يتبقى 5 → 15"
+    }
+  ]
+}

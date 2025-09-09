@@ -22,6 +22,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ar" dir="rtl">
+      <head>
+        <script
+          defer
+          data-domain="tutor-mvp-blush.vercel.app"
+          src="https://plausible.io/js/script.js"
+        ></script>
+      </head>
       <body
         className={`${cairo.variable} min-h-dvh bg-gradient-to-b from-sky-50 via-white to-emerald-50 text-neutral-900`}
         style={{ fontFamily: "var(--font-cairo), system-ui, Segoe UI, Tahoma" }}
